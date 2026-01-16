@@ -1,0 +1,293 @@
+--[[
+	Player Lifecycle Module
+	----------------
+	Initializes player data/templates, collision, device handling, profile load/save,
+	admin chat commands, badges, and periodic data updates.
+
+	Created by: Guinogue — Modified on October 27, 2025
+]]
+
+local PlayerLifecycleModule = {}
+
+-----< Module Setup >
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalizationService = game:GetService("LocalizationService")
+local PhysicsService = game:GetService("PhysicsService")
+local StarterGui = game:GetService("StarterGui")
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Remotes = ReplicatedStorage.Remotes
+local APIs = ReplicatedStorage.APIs
+local Settings = require(APIs.settings)
+local QuestsAPI = require(APIs.quests)
+local Handler = require(APIs.handler)
+local GameplayAPI = require(APIs.gameplay)
+local DataAPI = require(APIs.data)
+local ProfileService = require(ServerScriptService:WaitForChild("profile_service"))
+local BadgeAPI = require(ServerScriptService:WaitForChild("badge_manager"))
+local ChatAPI = require(ServerScriptService:WaitForChild("chat_manager"))
+
+-----< Starter Gui >
+
+local function setupStarterGui()
+	StarterGui.ScreenOrientation = Settings.ScreenOrientation
+end
+
+-----< Profile Templates >
+
+local LeaderstatsTemplate = {}
+local Mirroring = { ["TotalCash"] = { Mirror = "Cash", Parent = function(Data) return Data end, Reset = nil, ResetFrom = nil } }
+
+local function setupTemplates()
+	DataAPI.ProfileTemplate.GamePasses = DataAPI.ProfileTemplate.GamePasses or {}
+	DataAPI.ProfileTemplate.TemporaryGamePasses = DataAPI.ProfileTemplate.TemporaryGamePasses or {}
+	DataAPI.ProfileTemplate.Subscriptions = DataAPI.ProfileTemplate.Subscriptions or {}
+	DataAPI.ProfileTemplate.Badges = DataAPI.ProfileTemplate.Badges or {}
+	for Name,Info in pairs(Mirroring) do
+		Info.Parent(DataAPI.ProfileTemplate)[Name] = 0
+		if Info.Reset then Info.Parent(DataAPI.ProfileTemplate)[Name.."Version"] = 0 end
+	end
+	for _,GamePass in pairs(Settings.GamePasses) do
+		DataAPI.ProfileTemplate.GamePasses[GamePass] = false
+		DataAPI.ProfileTemplate.TemporaryGamePasses[GamePass] = 0
+	end
+	for _,Subscription in pairs(Settings.Subscriptions) do
+		DataAPI.ProfileTemplate.Subscriptions[Subscription] = false
+	end
+	for Badge,_ in pairs(BadgeAPI.Badges) do
+		DataAPI.ProfileTemplate.Badges[Badge] = false
+	end
+end
+
+-----< Profile Store >
+
+local function setupProfileStore()
+	DataAPI.ProfileStore = DataAPI.ProfileStore or ProfileService.GetProfileStore("PlayerData", DataAPI.ProfileTemplate)
+end
+
+-----< Collision Groups >
+
+local function setupCollision()
+	PhysicsService:RegisterCollisionGroup("Players")
+	PhysicsService:CollisionGroupSetCollidable("Players", "Players", Settings.PlayersCanCollide)
+end
+
+-----< Character >
+
+local function CharacterAdded(Character)
+	local Player = Players:GetPlayerFromCharacter(Character)
+	if not Player:HasAppearanceLoaded() then Player.CharacterAppearanceLoaded:Wait() end
+	for _,Descendant in pairs(Character:GetDescendants()) do
+		if Descendant:IsA("BasePart") then Descendant.CollisionGroup = "Players" end
+	end
+end
+
+-----< Device >
+
+local function setupDevice()
+	local Devices = {"PC","Console","Mobile"}
+	Remotes.Handler.Device.OnServerEvent:Connect(function(Player, Device)
+		if not table.find(Devices, Device) then return end
+		Player:WaitForChild("Device").Value = Device
+	end)
+end
+
+-----< Player Added >
+
+local function onPlayerAdded(Player)
+	Handler.characterAddedFunction(Player, CharacterAdded)
+	Handler.create("StringValue", Player, "Device", "PC")
+	Handler.create("BoolValue", Player, "Premium", Player.MembershipType == Enum.MembershipType.Premium)
+	local Leaderstats = Handler.create("Folder", Player, "leaderstats")
+	local PlayerGui = Player:WaitForChild("PlayerGui")
+	task.spawn(function()
+		local InGroup = Handler.forcePcall(1,.1, Player.IsInGroup, Player, Settings.GroupId)
+		local GroupRank = Handler.forcePcall(1,.1, Player.GetRankInGroup, Player, Settings.GroupId)
+		local CountryCode = Handler.forcePcall(1,.1, LocalizationService.GetCountryRegionForPlayerAsync, LocalizationService, Player)
+		Handler.create("BoolValue", Player, "Group", InGroup)
+		Handler.create("IntValue", Player, "GroupRank", GroupRank)
+		Handler.create("StringValue", Player, "CountryCode", CountryCode)
+		ChatAPI.updateChat(Player); ChatAPI.chatted(Player)
+	end)
+	ChatAPI.systemMessage(Player.Name.." has joined the game!", "rgb(180,180,180)")
+	local Profile = DataAPI.ProfileStore:LoadProfileAsync(DataAPI.Version .. Player.UserId)
+	local Data,Folder
+	local Commands = {
+		["/addxp"] = function(Plr, Amount, offline)
+			Amount = tonumber(Amount); if typeof(Amount) ~= "number" then return end
+			if offline then
+				local ProfileForUser = DataAPI.ProfileStore:LoadProfileAsync(DataAPI.Version .. Plr)
+				Remotes.Handler.Notify:FireClient(Player, `Loaded Profile ({DataAPI.Version}.{Plr})`, "Green")
+				ProfileForUser.Data.XP += Amount; ProfileForUser:Release()
+				Remotes.Handler.Notify:FireClient(Player, `Released Profile ({DataAPI.Version}.{Plr})`, "Green")
+				return
+			end
+			local D = DataAPI.Data(Plr); D.XP += Amount; DataAPI.UpdateData(Plr)
+		end,
+		["/addcash"] = function(Plr, Amount, offline)
+			Amount = tonumber(Amount); if typeof(Amount) ~= "number" then return end
+			if offline then
+				local ProfileForUser = DataAPI.ProfileStore:LoadProfileAsync(DataAPI.Version .. Plr)
+				Remotes.Handler.Notify:FireClient(Player, `Loaded Profile ({DataAPI.Version}.{Plr})`, "Green")
+				ProfileForUser.Data.Cash += Amount; ProfileForUser:Release()
+				Remotes.Handler.Notify:FireClient(Player, `Released Profile ({DataAPI.Version}.{Plr})`, "Green")
+				return
+			end
+			local D = DataAPI.Data(Plr); D.Cash += Amount; DataAPI.UpdateData(Plr)
+		end,
+		["/setlevel"] = function(Plr, Amount, offline)
+			Amount = tonumber(Amount); if typeof(Amount) ~= "number" then return end
+			if offline then
+				local ProfileForUser = DataAPI.ProfileStore:LoadProfileAsync(DataAPI.Version .. Plr)
+				Remotes.Handler.Notify:FireClient(Player, `Loaded Profile ({DataAPI.Version}.{Plr})`, "Green")
+				ProfileForUser.Data.XP = GameplayAPI.LevelToXP(math.clamp(Amount, 0, 50))
+				Remotes.Handler.Notify:FireClient(Player, `Success, Level set to {GameplayAPI.XPToLevel(ProfileForUser.Data.XP)})`, "Green")
+				ProfileForUser:Release()
+				Remotes.Handler.Notify:FireClient(Player, `Released Profile ({DataAPI.Version}.{Plr})`, "Green")
+				return
+			end
+			local D = DataAPI.Data(Plr); D.XP = GameplayAPI.LevelToXP(math.clamp(Amount,0,50))
+			Remotes.Handler.Notify:FireClient(Player, `Success, Level set to {GameplayAPI.XPToLevel(D.XP)})`, "Green")
+			DataAPI.UpdateData(Plr)
+		end,
+	}
+	local admins = require(ReplicatedStorage.Configurations.Admins)
+	Player.Chatted:Connect(function(Message)
+		local isAdmin = table.find(admins, Player.UserId) ~= nil
+		if isAdmin then
+			local Splits = string.split(Message, " "); local Command,User,Amount = Splits[1],Splits[2],Splits[3]
+			local PlayerFound; for _,v in Players:GetPlayers() do if v.Name == User or v.DisplayName == User then PlayerFound = v break end end
+			if not PlayerFound then
+				local UserId; local ok,err = pcall(function() UserId = Players:GetUserIdFromNameAsync(User) end)
+				if not ok then Remotes.Handler.Notify:FireClient(Player, "Failed to fetch user.", "Red") else Commands[Command](UserId, Amount, true) end
+				return
+			end
+			if Commands[Command] then Commands[Command](PlayerFound, Amount); Remotes.Handler.Notify:FireClient(Player, "Command Worked", "Green"); Remotes.Handler.Notify:FireClient(Player, `{Player.Name} has changed your stats`, "Green") end
+		end
+	end)
+	if Profile ~= nil then
+		Profile:Reconcile()
+		Profile:ListenToRelease(function() DataAPI.Profiles[Player] = nil; Player:Kick() end)
+		if Player:IsDescendantOf(Players) then
+			DataAPI.Profiles[Player] = Profile
+			Data = Profile.Data; Data.Joins += 1
+			for _,Info in pairs(Data.NPCs) do Info.Time = Info.Time or os.time() end
+			if Data.Joins == 1 then
+				Data.FirstJoin = os.time()
+				Data.Furniture = {
+					["Chair"] = { CF = "-38.5, 1, 27.9999695, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Furniture", Item = "Basic Chair" },
+					["Cooktop"] = { CF = "-38.5, 1, -7, 0, 0, 1, 0, 1, 0, -1, 0, 0", Category = "Appliances", Item = "Cooktop" },
+					["Counter"] = { CF = "-38.5, 1, 1, -1, 0, 0, 0, 1, 0, 0, 0, -1", Category = "Appliances", Item = "Table" },
+					["Register"] = { CF = "-28.5, 1, 6.99996948, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Appliances", Item = "Register" },
+					["Table"] = { CF = "-38.5, 1, 23.9999695, 0, 0, 1, 0, 1, 0, -1, 0, 0", Category = "Furniture", Item = "Dirty Table" },
+					["{08b28526-158c-4554-95bf-6cd21e5a58cc}"] = { CF = "-11.5, 1.00000012, -14, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Decoration", Item = "Rectangle Light" },
+					["{0c170c7c-baa3-4604-bb27-abcfe31ead07}"] = { CF = "-10.5, 1.00000012, 30, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Decoration", Item = "Rectangle Light" },
+					["{1901f0cd-c9f1-44dc-8f7d-b93d0b7ef3ad}"] = { CF = "-22.5, 1, -17, -1, 0, 0, 0, 1, 0, 0, 0, -1", Category = "Appliances", Item = "Trashbin" },
+					["{57fb758a-d2f3-4063-a198-c6a13e8ff990}"] = { CF = "-10.5, 1.00000012, 14, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Decoration", Item = "Rectangle Light" },
+					["{70c9e241-277d-4c10-9460-3116d34499f5}"] = { CF = "-33.5, 1.00000012, -14, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Decoration", Item = "Rectangle Light" },
+					["{7739e120-b152-4c48-b50f-20d3e5ba829b}"] = { CF = "-34.5, 1.00000012, 30, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Decoration", Item = "Rectangle Light" },
+					["{939649b7-7630-4fdc-97d1-622a02d9d3d4}"] = { CF = "-34.5, 1.00000012, 22, 1, 0, 0, 0, 1", Category = "Decoration", Item = "Rectangle Light" },
+					["{94520b16-0d07-4034-b60e-bb287d74a527}"] = { CF = "-33.5, 1.00000012, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Decoration", Item = "Rectangle Light" },
+					["{ea0e7dd0-d612-49ec-bf23-2bef0b6f1ecd}"] = { CF = "-11.5, 1.00000012, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Decoration", Item = "Rectangle Light" },
+					["{ee7f1fb0-5608-41bf-af3d-783e140fef65}"] = { CF = "-24.5, 1.00000012, 12, 1, 0, 0, 0, 1, 0, 0, 0, 1", Category = "Decoration", Item = "Rectangle Light" },
+				}
+			end
+			if Data.Settings.Tutorial < 29 then Data.Settings.Tutorial = 1; Data.Settings.Packages = {}; Data.Settings.Foods = {}; Data.Settings.Open = false; Data.Foods = {}; Data.Packages = {} end
+			if os.time() - Data.LastLeft > Settings.SessionBuffer then Data.SessionPlayTime = 0 end
+			Data.LastPlaceVersion = game.PlaceVersion
+			task.spawn(DataAPI.GetOfflineData, Player)
+		else
+			Profile:Release(); return
+		end
+	else
+		Player:Kick(); return
+	end
+	local FolderObj = Handler.tableToObject(Data, "Data")
+	Handler.descendantAdded(FolderObj, function(Descendant)
+		FolderObj:SetAttribute("Descendants", #FolderObj:GetDescendants())
+		Handler.onDestroy(Descendant, function() FolderObj:SetAttribute("Descendants", #FolderObj:GetDescendants()) end)
+	end)
+	FolderObj.Parent = Player
+	for _,Info in pairs(LeaderstatsTemplate) do
+		local Instance = Info.Ancestry(FolderObj)
+		local NewValue = Handler.create(Instance.ClassName, Leaderstats, Info.Name)
+		Handler.changed(Instance, function(Value) NewValue.Value = Value end)
+	end
+	for Name,Info in pairs(Mirroring) do
+		local Mirror = FolderObj[Info.Mirror]
+		Handler.changed(Mirror, function(Value, Old)
+			if Value > Old then Info.Parent(Data)[Name] += Value - Old; DataAPI.UpdateData(Player) end
+		end)
+	end
+	task.spawn(function()
+		BadgeAPI.AwardBadge(Player, "Welcome")
+		for Stat,Badges in pairs(BadgeAPI.Amounts) do
+			Handler.changed(FolderObj[Stat], function(Value)
+				for Requirement,Badge in pairs(Badges) do if Value >= Requirement then BadgeAPI.AwardBadge(Player, Badge) end end
+			end)
+		end
+		for Parent,Badges in pairs(BadgeAPI.Children) do
+			Handler.childAdded(FolderObj[Parent], function(Child)
+				local Badge = Badges[Child.Name]; if Badge then BadgeAPI.AwardBadge(Player, Badge) end
+			end)
+		end
+		for Badge,UserIds in pairs(BadgeAPI.Meet) do
+			for _,UserId in pairs(UserIds) do
+				local Found = false
+				if Player.UserId == UserId then Found = true; for _,Plr in pairs(Players:GetPlayers()) do BadgeAPI.AwardBadge(Plr, Badge) end
+				else for _,Plr in pairs(Players:GetPlayers()) do if Plr.UserId == UserId then Found = true end end end
+				if Found then BadgeAPI.AwardBadge(Player, Badge) break end
+			end
+		end
+	end)
+	while Player.Parent do
+		Data.SessionPlayTime += 1; Data.PlayTime += 1
+		for TemporaryGamePass,Value in pairs(Data.TemporaryGamePasses) do if Value > 0 and DateTime.now().UnixTimestamp > Value then Data.TemporaryGamePasses[TemporaryGamePass] = 0; Data.GamePasses[TemporaryGamePass] = false end end
+		for Name,Info in pairs(Mirroring) do
+			if Info.Reset then local Version = Handler.version(Info.Reset, Info.ResetFrom); if Data[Name.."Version"] ~= Version then Data[Name.."Version"] = Version; Data[Name] = 0 end end
+		end
+		local Date,LastJoined = Handler.version(86400, Data.FirstJoin), Data.LastJoined
+		if LastJoined ~= Date then
+			Data.LoginStreak = ((Date - 1) == LastJoined and Data.LoginStreak + 1) or 1
+			Data.LastJoined = Date
+			if (Date - 1) ~= LastJoined then for Day,_ in pairs(Data.DailyRewards) do Data.DailyRewards[Day] = false end end
+		end
+		for Potion,Value in pairs(Data.ActivePotions) do if Value > 0 then Data.ActivePotions[Potion] -= 1 end end
+		--[[ Quests versioning placeholder
+		for Type,Info in pairs(QuestsAPI.Quests) do
+			local Version = QuestsAPI.GetVersion(Data, Type)
+			if Data.Quests[Type].Version ~= Version then Data.Quests[Type].Version = Version; QuestsAPI.SetSession(Data, Type) end
+		end]]
+		DataAPI.UpdateData(Player)
+		task.wait(1)
+	end
+end
+
+-----< Player Removing >
+
+local function onPlayerRemoving(Player)
+	local Restaurant = workspace:WaitForChild("OwnedRestaurants"):FindFirstChild(Player.Name)
+	local Profile = DataAPI.Profile(Player)
+	if Profile ~= nil then
+		if Restaurant then
+			for _,Package in pairs(Restaurant.Packages:GetChildren()) do Profile.Data.Packages[Package.Name].CF = tostring(Restaurant:GetPivot():ToObjectSpace(Package.Drag.CFrame)) end
+			for _,Food in pairs(Restaurant.Ingredients:GetChildren()) do Profile.Data.Foods[Food.Name].CF = tostring(Restaurant:GetPivot():ToObjectSpace(Food.Drag.CFrame)) end
+		end
+		Profile.Data.LastLeft = os.time()
+		Profile:Release()
+	end
+	if Restaurant then Restaurant:Destroy() end
+end
+
+-----< Initialize >
+
+function PlayerLifecycleModule.Initialize()
+	setupStarterGui(); setupTemplates(); setupProfileStore(); setupCollision(); setupDevice()
+	Handler.playerAddedFunction(onPlayerAdded)
+	Handler.playerRemovingFunction(onPlayerRemoving)
+	return true
+end
+
+return PlayerLifecycleModule
