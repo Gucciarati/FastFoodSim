@@ -1,47 +1,71 @@
 --!strict
+--[[
+	BoostsClient
+	-----------
+	Handles the Boosts tab UI in the Computer interface.
+	Displays available boosts with duration options and purchase prompts.
+]]
+
 local MarketplaceService = game:GetService("MarketplaceService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
+local BoostsConfig = require(ReplicatedStorage.Config.BoostsConfig)
 
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local PlayerData = LocalPlayer:WaitForChild("Data", 60)
+
+local MainScreenGui = PlayerGui:WaitForChild("main")
+local BoostsFrame = MainScreenGui.Modals.Computer.Frames.Boosts
+local BoostsContainer = BoostsFrame:FindFirstChild("Container")
 
 local function PopulateBoostsList()
 
-    for _, BoostData in BoostsRegistry.registry do
-        local BoostFrame = BoostTemplate:Clone()
-        BoostFrame.Parent = BoostsScrollFrame
-        BoostFrame.Name = BoostData.Name
+	for BoostName, BoostData in BoostsConfig.registry do
+		local BoostFrame = BoostsContainer:FindFirstChild(BoostName, true)
+		BoostFrame.Name = BoostName
+		BoostFrame.Visible = true
 
-        local NameLabel = BoostFrame.Name
-        local DescriptionLabel = BoostFrame.Description
-        local IconImage = BoostFrame.Icon
-        local ActivateButton = BoostFrame.ActivateButton
+		local DurationNumber
+		local DurationPrefix
 
-        NameLabel.Text = BoostData.Name
-        DescriptionLabel.Text = BoostData.Description
-        IconImage.Image = BoostData.Icon
+		for _, DurationData in BoostData.durations do
+			local Duration = DurationData.Duration
+			if Duration < 60 then
+				DurationNumber = Duration
+				DurationPrefix = "Sec"
+			elseif Duration < 3600 then
+				DurationNumber = math.floor(Duration / 60)
+				DurationPrefix = "Mins"
+			else
+				DurationNumber = math.floor(Duration / 3600)
+				DurationPrefix = "Hrs"
+			end
 
-        for DurationName, DurationValue in BoostData.Durations do
-            local PriceInRobux = MarketplaceService:GetProductInfo(DurationValue.ProductId).PriceInRobux
+			local FormattedDuration = `{DurationNumber} {DurationPrefix}`
+			local DurationOptionButton = BoostFrame:FindFirstChild(FormattedDuration)
 
-            local DurationButton = BoostFrame.DurationsFrame.Template:Clone()
-            local DurationLabel = DurationButton.DurationLabel
-            local PriceLabel = DurationButton.PriceLabel
+			local PriceLabel = DurationOptionButton.PriceLabel
 
-                DurationLabel.Text = DurationName
-                PriceLabel.Text = ` {PriceInRobux}`
+			local Success, PriceInRobux = pcall(function()
+				return MarketplaceService:GetProductInfo(DurationData.ProductId, Enum.InfoType.Product).PriceInRobux
+			end)
 
-                DurationButton.Activated:Connect(function()
-                    MarketplaceService:PromptProductPurchase(LocalPlayer, DurationValue.ProductId)
-                end)
+			if Success then
+				PriceLabel.Text = ` {PriceInRobux}`
+			else
+				PriceLabel.Text = " N/A"
+			end
 
-                DurationButton.Parent = BoostFrame.DurationsFrame
-        end
-
-        ActivateButton.Activated:Connect(function()
-            
-        end)
-    end
-
+			DurationOptionButton.Activated:Connect(function()
+				MarketplaceService:PromptProductPurchase(LocalPlayer, DurationData.ProductId)
+			end)
+		end
+	end
 end
 
+PopulateBoostsList()
 
-    
+
+return {}

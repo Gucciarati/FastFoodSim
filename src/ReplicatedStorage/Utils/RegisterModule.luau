@@ -10,7 +10,8 @@ function mainModule.requireModules(moduleList: {ModuleScript | Folder})
 		elseif module:IsA('ModuleScript') then
 			local isEnabled = module:GetAttribute("Enabled")
 			if isEnabled == nil or isEnabled == true then
-				local success, service = pcall(require, module)
+
+				local success, service = task.spawn(pcall, require, module)
 				if success then
 					print("[Module Loaded]:", module:GetFullName())
 
