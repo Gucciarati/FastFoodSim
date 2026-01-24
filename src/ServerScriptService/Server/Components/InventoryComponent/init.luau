@@ -1,4 +1,14 @@
 --!strict
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ProductConfigs = require(ReplicatedStorage.Config.ProductsConfig)
+
+local Add = script.Add
+
+local ADD_FUNCTIONS = {
+	Food = require(Add.Food),
+	Furniture = require(Add.Furniture),
+}
+
 local InventoryComponent = {}
 
 type Data = {
@@ -7,15 +17,22 @@ type Data = {
 	Furniture: { [string]: any },
 }
 
-function InventoryComponent.Add(data: Data, category: string, itemName: string, amount: number): boolean
-	if amount < 0 then return false end
+type AdditionalInformation = {
+	Name: string,
+	Id: string?,
+	Amount: number?,
+    Cframe : CFrame?,
+}
+
+function InventoryComponent.Add(data: Data, AdditionalInformation: AdditionalInformation)
+	local ProductInformation = ProductConfigs.registry[AdditionalInformation.Name]
 	
-	if not data[category] then
-		data[category] = {}
-	end
-	
-	data[category][itemName] = (data[category][itemName] or 0) + amount
-	return true
+	print(ProductInformation.category)
+	local IsFood = ProductInformation.category == "Food"
+	local FunctionName = if IsFood then "Food" else "Furniture"
+	local AddFunction = ADD_FUNCTIONS[FunctionName]
+
+	return AddFunction(data, AdditionalInformation)
 end
 
 function InventoryComponent.Remove(data: Data, category: string, itemName: string, amount: number): boolean

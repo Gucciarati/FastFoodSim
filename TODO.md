@@ -9,24 +9,70 @@ This document tracks the progress of the current implementation compared to the 
 - [x] Create Style and Structure Guide
 
 ### Market System
-- [ ] Implement `MarketClient.luau`
-  - [ ] Product display
-  - [ ] Purchase flow
+- [x] Implement `MarketClient.luau`
+  - [x] Product display
+  - [x] Purchase flow (Buy button)
+  - [x] Cart system (Add to cart, Clear cart)
+  - [x] Category filtering (CurrentComputerTab)
   - [ ] Gifting system
   - [ ] Limited stock tracking
   - [ ] Ownership display
-  - [ ] Category filtering
-- [ ] Set up server-side RemoteEvents for purchase validation
-- [ ] Implement server-side money deduction logic
+- [x] Set up server-side RemoteEvents for purchase validation (Buy.luau)
+- [x] Implement server-side money deduction logic
 - [ ] Implement server-side gift processing
 
 ### Inventory System
-- [ ] Design inventory system structure
-- [ ] Implement inventory management logic
-- [ ] Integrate inventory with market system
+- [x] Design inventory system structure (InventoryComponent)
+- [x] Implement inventory management logic (Add/Remove)
+- [x] Integrate inventory with market system
+
+### Delivery System
+- [x] Create delivery truck animation system
+- [x] Implement FindClosestLane helper
+- [x] Implement CalculateDeliveryPoint helper
+- [x] Implement CalculateDeliveryCFrames helper
+- [x] Implement GeneratePackages helper
+- [x] Implement MakePackagesInvisible/RevealPackages helpers
+- [x] Implement DepartTruck helper
+- [x] Trigger delivery on purchase via ServerEvents
+
+### Plot System
+- [x] Create PlotAssignment (assign/vacate plots on join/leave)
+- [x] Implement GetVacantPlot
+- [x] Implement GetPlayerPlot
+
+### Data Persistence
+- [x] Create DataService with ProfileService
+- [x] Implement CFrameSerdes (Serialize/Deserialize/ToWorldSpace/ToObjectSpace)
+- [x] Save furniture CFrames on player leave
+- [x] Save assembly (food package) CFrames on player leave
+- [x] Load and place furniture on player join
+- [x] Load and place assemblies on player join
+- [x] Place items without CFrame in delivery area (Spawn part)
+
+### Furniture System
+- [x] Create FurnitureComponent (Place, Unpack, PlaceAll)
+- [x] Create DefaultFurnitureService (inject starter furniture)
+- [x] Implement furniture unpacking from boxes
+- [x] Implement packed vs unpacked state
+
+### Food System
+- [x] Create FoodComponent (PlaceAssembly, PlaceAllAssemblies, UpdatePackageAppearance)
+- [x] Implement food package amount tracking
+- [x] Implement RemoveFromPackage
+
+### Grab/Release System
+- [x] Create Grab.luau (DisplayGrabVisuals, ClearGrabVisuals)
+- [x] Server-side grab/release via ServerEvents
+- [x] Client-side grab visuals
+
+### Replication System
+- [x] Create ReplicationClient with StateValues
+- [x] Create StateValue system for Fusion integration
+- [x] Implement GetPlayerData RemoteFunction
 
 ### UI System
-- [ ] Create UI for market system
+- [x] Integrate Fusion with StateValue
 - [ ] Create UI for inventory system
 - [ ] Implement UIHandler for managing UI interactions
 
@@ -42,10 +88,27 @@ This document tracks the progress of the current implementation compared to the 
 
 ### Miscellaneous
 - [ ] Review and optimize `StoreModule.luau`
-- [ ] Ensure alignment with new project structure
-- [ ] Remove unnecessary complexity from old recode attempt
+- [x] Ensure alignment with new project structure
+- [x] Remove unnecessary complexity from old recode attempt
 
-## Current Sprint (January 19, 2026)
+## Current Sprint (January 24, 2026)
+
+### Focus/Interaction System
+- [x] Create FocusClient.luau (pure detection system, fires signals only)
+- [x] Create GetInteractableStats.luau (determines type from attributes/tags/context)
+- [x] Create UpdateVisuals.luau (HoverUI with type-based actions)
+- [x] Create InteractionRegistry.luau (stores interaction display info)
+- [x] Create ItemRegistration.luau (registers items with display info)
+- [x] Create FindAssembly.luau (finds parent assembly from descendant)
+- [x] Create GetKeybindString.luau (converts keybinds to display strings)
+- [x] Add Events.luau signals (InteractPressed, SecondaryInteractPressed)
+- [x] Implement action lists per interactable type
+- [x] Implement title formats with placeholders ([Name], [Left], [Total])
+
+### Restaurant Helpers Visibility
+- [x] Create Visibility.luau utility (Hide/Show/HideChildren/ShowChildren)
+- [x] Update RestaurantShared.luau to hide snap points, placement areas, waypoints
+- [x] Confirm restaurants parent to PlotFolder
 
 ### Customer AI & Orders
 - [ ] Make NPCs walk in
@@ -90,4 +153,4 @@ This document tracks the progress of the current implementation compared to the 
   - [ ] Appliances
   - [ ] Decorative furniture
 
-**Expected Completion:** Tuesday, January 19, 2026
+**Last Updated:** January 24, 2026

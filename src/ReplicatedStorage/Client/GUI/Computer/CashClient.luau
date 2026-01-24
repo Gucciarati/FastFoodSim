@@ -1,10 +1,5 @@
 --!strict
---[[
-	CashClient
-	----------
-	Handles the Cash tab UI for Robux purchases, cash bundles, and special offers.
-]]
-
+if true then return true end
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")

@@ -1,12 +1,16 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Packages      = ReplicatedStorage:WaitForChild("Packages")
-local Net           = require(Packages.Net)
-local GameState     = ReplicatedStorage:WaitForChild("GameState")
-local AimTarget     = GameState:WaitForChild("AimTarget")
+local Packages      = ReplicatedStorage.Packages
 
+local GameState     = ReplicatedStorage.GameState
+local AimTarget     = GameState.AimTarget
+
+local Net                   = require(Packages.Net)
 local StartCookingProcessRF = Net:RemoteFunction("StartCookingProcess")
+
+local Events = require(ReplicatedStorage.SharedModules.Events)
+
 
 export type CookingProcessData = {
     ProcessType: string,
@@ -14,10 +18,10 @@ export type CookingProcessData = {
     IngredientId: string,
 }
 
-local function RequestCookingStart(FoodModel: any, FoodId: string)
+local function RequestCookingStart(MachineId: any, FoodId: string)
 
     local ProcessData = {
-        MachineId = FoodModel:GetAttribute("MachineId"),
+        MachineId = MachineId,
         FoodId = FoodId,
     }
 
@@ -34,17 +38,20 @@ end
 
 
 
-InteractPressed:Connect(function(InteractableId: string, InteractableType: string)
-    local target = AimTarget.Value
-    if not target then return end
+Events.InteractPressed:Connect(function(InteractableId: string, InteractableType: string)
+    local CurrentAimTarget = AimTarget.Value
+    if not CurrentAimTarget then return end
 
-    local IsCooking = target:GetAttribute("EndTime")
-    local FoodId = target:GetAttribute("Id")
-    assert(FoodId, `No FoodId for {target.Name}`) 
+    local IsCooking = CurrentAimTarget:GetAttribute("EndTime")
+    local FoodId = CurrentAimTarget:GetAttribute("Id")
+    assert(FoodId, `No FoodId for {CurrentAimTarget.Name}`) 
 
     if IsCooking then
         RegisterCookingInteraction(FoodId)
     else
-        RequestCookingStart(AimTarget, FoodId)
+        RequestCookingStart(CurrentAimTarget, FoodId)
     end
 end)
+
+
+Events.SnappedToKeySpot:Connect(RequestCookingStart)

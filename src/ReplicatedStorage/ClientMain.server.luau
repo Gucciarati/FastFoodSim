@@ -17,7 +17,12 @@ local RegisterModules = require(Utils.RegisterModule)
 
 
 local modules = {
+	ClientModules.Placement.AimTrackerClient,
 	ClientModules.GUI,
+	ClientModules.GUI.Focus.FocusClient,
+	ClientModules.ReplicationClient,
+	ClientModules.PlacementClient,
+	ClientModules.Cooking.FoodPlacementClient,
 }:: {ModuleScript}
 
 

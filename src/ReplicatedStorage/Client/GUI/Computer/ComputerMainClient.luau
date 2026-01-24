@@ -8,16 +8,15 @@ local Utils                   = ReplicatedStorage:WaitForChild('Utils')
 local Vendor                  = ReplicatedFirst.Vendor
 
 local GuiShared           = require(Shared.GuiShared)
+local StateValue          = require(ReplicatedStorage.Packages.StateValue)
 
 local LocalPlayer         = Players.LocalPlayer
 local PlayerGui           = LocalPlayer.PlayerGui
 
 local Tagged = require(Vendor.Tagged)
-local Connect = require(Vendor.ConnectUtil)
 local RequireAttribute = require(Utils.RequireAttribute)
 
 local OpenModalState          = ReplicatedStorage.GameState.OpenModal
-local CurrentComputerTabState = ReplicatedStorage.GameState.CurrentComputerTab
 
 local MainScreenGui = PlayerGui:WaitForChild('main')
 local SideButtons = MainScreenGui.Left
@@ -36,24 +35,26 @@ end)
 
 Tagged.observe(GuiShared.Tags.ComputerSideButtons, function(button: SidebarButtonAssembly)
 	button.Activated:Connect(function()
-		CurrentComputerTabState.Value = button.Opens.Value.Name
+		local CurrentComputerTab = StateValue.Peek("CurrentComputerTab")
+		CurrentComputerTab:set(button.Opens.Value.Name)
 	end)
 	return
 end)
 
-Connect.valueChanged(CurrentComputerTabState, function(curr,prev)
-	local tabToOpen  = TabFrames:FindFirstChild(curr) :: Frame?
-	local tabToClose = TabFrames:FindFirstChild(prev) :: Frame?
+local CurrentComputerTab = StateValue.Get("CurrentComputerTab")
+CurrentComputerTab.Changed:Connect(function(newTab: string)
+	local tabToOpen  = TabFrames:FindFirstChild(newTab) :: Frame?
 
-	if tabToClose and tabToClose ~= tabToOpen then
-		GuiShared.close(tabToClose)
+	for _, frame in TabFrames:GetChildren() do
+		if frame:IsA("Frame") and frame ~= tabToOpen then
+			GuiShared.close(frame)
+		end
 	end
 
 	if tabToOpen then
 		GuiShared.open(tabToOpen, UDim2.fromScale(1,1))	
 	end
-	
-end, false)
+end)
 
 
 return true

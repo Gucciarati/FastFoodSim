@@ -1,11 +1,5 @@
 --!strict
---[[
-	BoostsClient
-	-----------
-	Handles the Boosts tab UI in the Computer interface.
-	Displays available boosts with duration options and purchase prompts.
-]]
-
+if true then return true end
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")

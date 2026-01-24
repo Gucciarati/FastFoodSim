@@ -15,10 +15,17 @@ local ConnectUtil   = require(Vendor.ConnectUtil)
 local RegisterModules = require(Utils.RegisterModule)
 
 local modules = {
-	-- load this first
+	ServerModules.DataService,
 	ServerModules.PlayerServer,
 	ServerModules.RestaurantServer,
+	ServerModules.ReplicationService,
+	ServerModules.DefaultFurnitureService,
 	
+	ServerModules.Features.PlotAssignment,
+	ServerModules.Features.Delivery.Delivery,
+	ServerModules.Features.Market.Buy,
+	ServerModules.Features.Market.OpenPackage,
+	ServerModules.Features.Placement.Grab,
 } :: {ModuleScript}
 
 RegisterModules.requireModules(modules)

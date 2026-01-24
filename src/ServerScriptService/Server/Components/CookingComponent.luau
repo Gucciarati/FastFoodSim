@@ -69,37 +69,4 @@ function CookingComponent.GetCookingState(playerId: string, furnitureId: string)
 	return activeCookingSessions[sessionKey]
 end
 
-function CookingComponent.IsCooking(playerId: string, furnitureId: string): boolean
-	local sessionKey = playerId .. ":" .. furnitureId
-	return activeCookingSessions[sessionKey] ~= nil
-end
-
-function CookingComponent.GetTimeRemaining(playerId: string, furnitureId: string): number?
-	local sessionKey = playerId .. ":" .. furnitureId
-	local session = activeCookingSessions[sessionKey]
-	
-	if not session then
-		return nil
-	end
-	
-	local elapsed = os.time() - session.TimeStarted
-	local remaining = math.max(0, session.Duration - elapsed)
-	
-	return remaining
-end
-
-function CookingComponent.GetProgress(playerId: string, furnitureId: string): number?
-	local sessionKey = playerId .. ":" .. furnitureId
-	local session = activeCookingSessions[sessionKey]
-	
-	if not session then
-		return nil
-	end
-	
-	local elapsed = os.time() - session.TimeStarted
-	local progress = math.clamp(elapsed / session.Duration, 0, 1)
-	
-	return progress
-end
-
 return CookingComponent

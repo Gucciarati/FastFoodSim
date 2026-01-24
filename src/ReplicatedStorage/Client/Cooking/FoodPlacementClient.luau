@@ -3,11 +3,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players           = game:GetService("Players")
 
 local Utils         = ReplicatedStorage.Utils
+local Food = require(ReplicatedStorage.Config.Products.Food)
 local SetCollision  = require(Utils.SetCollision)
 
 local Net                       = require(ReplicatedStorage.Packages.Net)
-local RequestHoldFoodRE         = Net:RemoteEvent("HoldFood")
-local RequestFoodPlacementRE    = Net:RemoteEvent("PlaceFood")
+local HoldFoodRE                = Net:RemoteEvent("HoldFood")
+local ReleaseFoodRE             = Net:RemoteEvent("ReleaseFood")
+local PlaceFoodRE               = Net:RemoteEvent("PlaceFood")
+
+local Events = require(ReplicatedStorage.SharedModules.Events)
+local SetAnchored = require(ReplicatedStorage.Utils.SetAnchored)
 
 local GameState         = ReplicatedStorage.GameState
 local AimTarget         = GameState.AimTarget
@@ -25,8 +30,15 @@ local Highlight
 local APPROVED_COLOR = Color3.fromRGB(0, 255, 0)
 local DENIED_COLOR  = Color3.fromRGB(255, 0, 0)
 
+local function Ghostify(Model: Model)
+    for _, Descendant in Model:GetDescendants() do
+        if Descendant:IsA("BasePart") then
+            Descendant.Transparency = 0.5
+        end
+    end
+end
+
 local function AddHighlight(Model: any, Color: Color3?)
-    
     if not Highlight then
         Highlight = Instance.new("Highlight")
         Highlight.Name = "PlacementHighlight"
@@ -36,6 +48,7 @@ local function AddHighlight(Model: any, Color: Color3?)
 
     if Color then
         Highlight.FillColor = Color
+        Highlight.FillTransparency = 0.5
     else
         Highlight.FillTransparency = 1
     end
@@ -43,63 +56,93 @@ local function AddHighlight(Model: any, Color: Color3?)
     Highlight.Adornee = Model
 end
 
-local function HoldFood()
-    local FoodModel = AimTarget.Value
-    if not FoodModel then return end
-   
-    RequestHoldFoodRE:FireServer(FoodModel)
-    HoldPreview = FoodModel:Clone()
-    HoldPreview.Parent = workspace
+local function RemoveHighlight()
+    if Highlight then
+        Highlight.Adornee = nil
+    end
+end
 
-    PositionPreview = FoodModel:Clone()
-    --Ghostify(PositionPreview)
-    PositionPreview.Parent = workspace
+local function SetupHoldVisuals(FoodModel: Model)
+    
+    local NewModel = Instance.new("Model")
+    NewModel.Name = FoodModel.Name
+    FoodModel:Clone().Parent = NewModel
 
+    SetAnchored(NewModel, true)
+
+    HoldPreview =  NewModel
+    HoldPreview.Name = "HoldPreview"
+    HoldPreview.Parent = Camera
     SetCollision(HoldPreview, false)
+
+    PositionPreview = NewModel:Clone()
+    PositionPreview.Name = "PositionPreview"
+    Ghostify(PositionPreview)
+    PositionPreview.Parent = Camera
     SetCollision(PositionPreview, false)
 end
 
+local function ClearHoldVisuals()
+    if HoldPreview then
+        HoldPreview:Destroy()
+        HoldPreview = nil
+    end
 
-local function PlaceFood()
+    if PositionPreview then
+        PositionPreview:Destroy()
+        PositionPreview = nil
+    end
+
+    RemoveHighlight()
+end
+
+local function RequestHoldFood(InteractableModel: Model)
+    if not InteractableModel then return end
+   
+    HoldFoodRE:FireServer(InteractableModel)
+end
+
+local function ValidatePlacement(Preview: Model?): boolean
+    if not Preview then return false end
+    return true
+end
+
+local function RequestPlaceFood()
+    if not PositionPreview then return end
+
     local IsValid = ValidatePlacement(PositionPreview)
     if not IsValid then return end
-    --TODO: Notify in case of invalid placement
 
-
-    RequestFoodPlacementRE:FireServer(PositionPreview:GetPivot())
+    PlaceFoodRE:FireServer(PositionPreview:GetPivot())
 end
 
 local function UpdateLocalHoldVisual()
     if not HoldPreview then return end
 
-    local Character = LocalPlayer.Character
-    if not Character then return end
-
     local Size = HoldPreview:GetExtentsSize()
     local HoldOffset = CFrame.new(0, -1 - Size.Y / 2, -2 - Size.Z / 2)
 
     local TargetCFrame = Camera.CFrame * HoldOffset
-    local DragPart = HoldPreview:FindFirstChild("Drag")
-    if not DragPart then return end
-
-    DragPart.CFrame = TargetCFrame
+    HoldPreview:PivotTo(TargetCFrame)
 end
 
 local function UpdatePreview()
-   if not PositionPreview then return end
+    if not PositionPreview then return end
 
     local CurrentAimPosition = AimPosition.Value
     local CurrentRotationOffset = RotationOffset.Value
     local CurrentAimTarget = AimTarget.Value
-    if not CurrentAimTarget then return end
     
     local UpdateCFrame = CFrame.new(CurrentAimPosition) * CurrentRotationOffset
-    local SnapPrompt = CurrentAimTarget:GetAttribute("SnapPrompt")
 
-    if SnapPrompt then
-        UpdateCFrame = SnapPrompt.CFrame
-    else
-        UpdateCFrame = CFrame.new(CurrentAimPosition) * CurrentRotationOffset
+    if CurrentAimTarget then
+        local SnapPrompt = CurrentAimTarget:FindFirstChild("SnapPrompt")
+        if SnapPrompt and SnapPrompt:IsA("BasePart") then
+            local MachineId = SnapPrompt.Parent:GetAttribute("KeySpotId")
+            local FoodId = PositionPreview:GetAttribute("Id")
+            Events.SnappedToKeySpot:Fire(MachineId, FoodId, SnapPrompt)
+            UpdateCFrame = SnapPrompt.CFrame * CurrentRotationOffset
+        end
     end
 
     PositionPreview:PivotTo(UpdateCFrame)
@@ -119,16 +162,25 @@ RotationOffset.Changed:Connect(function()
     UpdatePreview()
 end)
 
-InteractPressed:Connect(function(InteractableId: string, InteractableType: string)
+Events.InteractPressed:Connect(function(InteractableModel: string)
     local CurrentAimTarget = AimTarget.Value
     if not CurrentAimTarget then return end
 
-    local IsHoldingIngredient = LocalPlayer:GetAttribute("HeldFoodId")
+    local IsHoldingIngredient = LocalPlayer:GetAttribute("GrabId")
     if IsHoldingIngredient then
-        PlaceFood()
+        RequestPlaceFood(InteractableModel)
     else
-        HoldFood()
+        RequestHoldFood(InteractableModel)
     end
+end)
+
+HoldFoodRE.OnClientEvent:Connect(function(ItemModel: Model)
+    SetupHoldVisuals(ItemModel)
+end)
+
+
+ReleaseFoodRE.OnClientEvent:Connect(function()
+    ClearHoldVisuals()
 end)
 
 return true

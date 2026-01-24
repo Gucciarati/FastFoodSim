@@ -1,10 +1,6 @@
 --!strict
---[[
-	EmployeesClient
-	---------------
-	Handles the Employees tab UI for hiring, firing, and viewing worker stats.
-]]
 
+if true then return true end
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")

@@ -1,14 +1,14 @@
 local ReplicatedStorage  = game:GetService("ReplicatedStorage")
 local Players           = game:GetService("Players")
 
-local GameState     = ReplicatedStorage:WaitForChild("GameState")
-local AimTarget     = GameState:WaitForChild("AimTarget")
-local AimPosition   = GameState:WaitForChild("AimPosition")
+local GameState     = ReplicatedStorage.GameState
+local AimTarget     = GameState.AimTarget
+local AimPosition   = GameState.AimPosition
 
 local LocalPlayer   = Players.LocalPlayer
 local Camera        = workspace.CurrentCamera
 
-
+print("dd")
 local function UpdateFocus()
     local Character = LocalPlayer.Character
     if not Character then return end
@@ -28,8 +28,21 @@ local function UpdateFocus()
     local Position = RaycastResult and RaycastResult.Position
 
     AimTarget.Value = Target
-    AimPosition.Value = Position
+    AimPosition.Value = Position or vector.zero
 	return Target
 end
 
-Camera:GetPropertyChangedSignal("CFrame"):Connect(UpdateFocus)
+Camera:GetPropertyChangedSignal("CFrame"):Connect(
+    function()
+       print "[AimTrackerClient] Camera CFrame changed, updating focus"
+        UpdateFocus()
+    end
+)
+
+game.RunService.Heartbeat:Connect(
+    function()
+        UpdateFocus()
+    end
+)
+
+return true

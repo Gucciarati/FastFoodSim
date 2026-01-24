@@ -17,15 +17,8 @@ local ProductRegistry = CreateRegistry.CreateDictRegistry()
 
 local function addProductsToRegistry(products)
 	for productName, productData in products do
-		local displayName = productName
-		
-		if productData.unitSize and productData.unitSize > 1 then
-			displayName = `{productData.unitSize}x {productName}`
-		elseif productData.unitSize and productData.unitSize == 1 then
-			displayName = `1x {productName}`
-		end
-		
-		ProductRegistry.register(displayName, productData)
+		productData.name = productName
+		ProductRegistry.register(productName, productData)
 	end
 end
 

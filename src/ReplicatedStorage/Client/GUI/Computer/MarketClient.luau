@@ -9,66 +9,147 @@ local Vendor                  = ReplicatedFirst.Vendor
 
 local Config = ReplicatedStorage.Config
 
+local Decoration = require(ReplicatedStorage.Config.Products.Decoration)
 local GuiShared           = require(Shared.GuiShared)
 local ProductsConfig      = require(Config.ProductsConfig)
 
 local LocalPlayer         = Players.LocalPlayer
 local PlayerGui           = LocalPlayer.PlayerGui
 
-local Tagged           = require(Vendor.Tagged)
-local Connect          = require(Vendor.ConnectUtil)
-local RequireAttribute = require(Utils.RequireAttribute)
+
+local Net = require(ReplicatedStorage.Packages.Net)
+local BuyRE = Net:RemoteEvent("Buy")
+
+local IncrementFusionValue  = require(Utils.IncrementFusionValue)
+
+local StateValue = require(ReplicatedStorage.Packages.StateValue)
+
+local Fusion = require(ReplicatedStorage.Packages.Fusion)
+local StateValue = require(ReplicatedStorage.Packages.StateValue)
+local Scope = Fusion.scoped(Fusion)
+local Peek = Fusion.peek
 
 local OpenModalState          = ReplicatedStorage.GameState.OpenModal
-local CurrentComputerTabState = ReplicatedStorage.GameState.CurrentComputerTab
 
 local MainScreenGui = PlayerGui:WaitForChild('main')
-local SideButtons   = MainScreenGui.Left
 local ModalsFolder  = MainScreenGui.Modals
 local ComputerFrame = ModalsFolder.Computer
 
 local MarketFrame           = ComputerFrame.Frames.Market
 local ProductsContainer     = MarketFrame.Products.Products
 local ShoppingCart          = MarketFrame.Products.ShoppingCart
-local InfoTabs              = MarketFrame.Info.Tabs
 
--- Get product template (use existing "Burger Buns" or "Gold Cooktop" as template)
-local ProductTemplate = ProductsContainer:FindFirstChild("Burger Buns") or ProductsContainer:FindFirstChild("Gold Cooktop")
+local ProductTemplate       = ProductsContainer:FindFirstChild("Burger Buns")
+local GoldProductTemplate   = ProductsContainer:FindFirstChild("GoldTemplate")
+local CartItemTemplate     = ShoppingCart:FindFirstChild("Template", true)
 
+local BuyCartButton = ShoppingCart.Buy
+local ClearCartButton = ShoppingCart.Delete
 
-local function SetupCategorySelectors()
-    -- Category tabs are in MarketFrame.Info.Tabs
-    if not InfoTabs then return end
-    
-    local categoryButtons = {
-        Food = InfoTabs:FindFirstChild("Food"),
-        Appliances = InfoTabs:FindFirstChild("Appliances"),
-        Furniture = InfoTabs:FindFirstChild("Furniture"),
-        Decoration = InfoTabs:FindFirstChild("Decoration")
-    }
-    
-    for categoryName, button in pairs(categoryButtons) do
-        if button then
-            button.Activated:Connect(function()
-                -- Filter products by category
-                for _, productFrame in pairs(ProductsContainer:GetChildren()) do
-                    if productFrame:IsA("Frame") and productFrame:FindFirstChild("Container") then
-                        local categoryAttr = productFrame:GetAttribute("Category")
-                        if categoryAttr then
-                            productFrame.Visible = categoryAttr == categoryName
-                        end
-                    end
-                end
-            end)
+local AmountsToPurchasePerProduct : {[string]: Fusion.Value<number>} = {}
+local CartList: any = {}
+
+local function ClearCartDisplay()
+    for _, Child in ShoppingCart.ScrollingFrame:GetChildren() do
+        if Child:IsA("Frame") and Child ~= CartItemTemplate then
+            Child:Destroy()
         end
     end
+end
+
+local function ClearCart()
+    CartList = {}
+    ClearCartDisplay()
+    UpdateTotalCartPrice()
+end
+
+local function BuyCart()
+    local PurchaseList = {}
+    
+    for ProductName, CartItem in CartList do
+        table.insert(PurchaseList, {
+            ProductName = ProductName,
+            Amount = Peek(CartItem.Amount),
+        })
+    end
+    
+    if #PurchaseList < 1 then return end
+    
+    BuyRE:FireServer(PurchaseList)
+    ClearCart()
+end
+
+local function UpdateCartDisplay()
+    ClearCartDisplay()
+    
+    print("Updating cart display", CartList)
+    for _, CartItem in CartList do
+        local CartItemFrame = CartItemTemplate:Clone()
+        CartItemFrame.Name = CartItem.ProductName
+
+        local NameLabel = CartItemFrame:FindFirstChild("ItemName", true)
+        local TotalPriceLabel = CartItemFrame:FindFirstChild("ItemCost", true)
+        local AmountLabel = CartItemFrame:FindFirstChild("Amount", true)
+
+        local AmountComputed = Scope:Computed(function(Use)
+            return Use(CartItem.Amount)
+        end)
+
+        local TotalPriceComputed = Scope:Computed(function(Use)
+            local ProductData = ProductsConfig.registry[CartItem.ProductName]
+            local Amount = Use(CartItem.Amount)
+            return `${ProductData.price * Amount}`
+        end)
+
+        Scope:Hydrate(AmountLabel) {
+            Text = AmountComputed
+        }
+
+        Scope:Hydrate(TotalPriceLabel) {
+            Text = TotalPriceComputed
+        }
+
+        print(CartItemFrame)
+        CartItemFrame.Visible = true
+        CartItemFrame.Parent = ShoppingCart.ScrollingFrame
+        NameLabel.Text = CartItem.ProductName
+    end
+end
+
+function UpdateTotalCartPrice()
+    local TotalPrice = 0
+    for _, CartItem in CartList do
+        local ProductData = ProductsConfig.registry[CartItem.ProductName]
+        local Amount = Peek(CartItem.Amount)
+        TotalPrice += ProductData.price * Amount
+    end
+
+    local TotalCartPriceLabel = ShoppingCart:FindFirstChild("TotalPrice", true)
+    Scope:Hydrate(TotalCartPriceLabel) {
+        Text = `Total: ${TotalPrice}`
+    }
+end
+
+local function AddProductToCart(ProductName: string, Amount: number)
+    if CartList[ProductName] then
+        local CartItemData = CartList[ProductName]
+        local NewAmount = Scope.peek(CartItemData.Amount) + Amount
+        CartItemData.Amount:set(NewAmount)
+    else
+        CartList[ProductName] = {
+            ProductName = ProductName,
+            Amount = Scope:Value(Amount),
+        }
+    end
+
+    UpdateTotalCartPrice()
+    UpdateCartDisplay()
 end
 
 
 local function PopulateProductList()
     if not ProductTemplate then return end
     
-    -- Clear existing products except template
     for _, child in pairs(ProductsContainer:GetChildren()) do
         if child ~= ProductTemplate and child:IsA("Frame") then
             child:Destroy()
@@ -76,93 +157,86 @@ local function PopulateProductList()
     end
     
     for _, ProductData in ProductsConfig.registry do
-        local productFrame = ProductTemplate:Clone()
-        productFrame.Name = ProductData.Name
-        productFrame.Visible = true
-        productFrame:SetAttribute("Category", ProductData.category)
+        local ProductName = ProductData.name
+
+        local ProductFrame = ProductTemplate:Clone()
+        ProductFrame:SetAttribute("Category", ProductData.category)
         
-        local container = productFrame:FindFirstChild("Container") or productFrame
-        local nameLabel = container:FindFirstChild("ItemName")
-        local priceLabel = container:FindFirstChild("UnitPrice")
-        local iconImage = container:FindFirstChild("Icon")
-        local lockedOverlay = container:FindFirstChild("LockedOverlay")
-        local buyButton = container:FindFirstChild("Buy")
-        local productButton = container:FindFirstChild("Product")
-        local amountFrame = container:FindFirstChild("BuyAmount")
+        local NameLabel         = ProductFrame:FindFirstChild("ItemName", true)
+        local UnitPriceLabel    = ProductFrame:FindFirstChild("UnitPrice", true)
+        local IconImage         = ProductFrame:FindFirstChild("Icon", true)
+        local AmountTextBox   = ProductFrame:FindFirstChild("Amount", true)
+
+        local LockedOverlay     = ProductFrame:FindFirstChild("LockedOverlay", true)
+        local AddToListButton   = ProductFrame:FindFirstChild("Buy", true)
+        local TotalPriceLabel   = AddToListButton:FindFirstChild("Amount", true)
+
+        NameLabel.Text = `{ProductData.unitSize}x {ProductData.name}`
+        UnitPriceLabel.Text = `${ProductData.unitPrice or 0}`
+        IconImage.Image = ProductData.icon
         
-        if nameLabel then nameLabel.Text = `{ProductData.unitSize}x {ProductData.Name}` end
-        if priceLabel then priceLabel.Text = `$${ProductData.unitPrice or 0}` end
-        if iconImage then iconImage.Image = ProductData.icon end
+        local AmountToPurchase = Scope:Value(1)
+        AmountsToPurchasePerProduct[ProductData.name] = AmountToPurchase
+
+        local TotalPrice = Scope:Computed(function(Use)
+            local AmountToPurchaseValue = Use(AmountToPurchase)
+            return `${(ProductData.price) * AmountToPurchaseValue}`
+        end)
+
+        local ShowLockedOverlay = Scope:Computed(function(Use)
+            local CurrentLevel = Use(StateValue.Peek("Level"))
+            return CurrentLevel < ProductData.lvlRequirement
+        end)
+
+        local ShowProductFrame = Scope:Computed(function(Use)
+                local CurrentTab = Use(StateValue.Peek("CurrentComputerTab"))
+                return CurrentTab == "Market"
+        end)
         
-        productFrame.LayoutOrder = ProductData.lvlRequirement or 0
+        Scope:Hydrate(TotalPriceLabel) {
+            Text = TotalPrice
+        }
+
+        Scope:Hydrate(LockedOverlay) {
+            Visible = ShowLockedOverlay
+        }
+
+        Scope:Hydrate(AmountTextBox) {
+            Text = AmountToPurchase
+        }
+
+        local IncreaseButton = ProductFrame:FindFirstChild("Increase", true)
+        local DecreaseButton = ProductFrame:FindFirstChild("Reduce", true)
+
+        IncreaseButton.Activated:Connect(function()
+            IncrementFusionValue(AmountToPurchase, 1, 0)
+        end)
+
+        DecreaseButton.Activated:Connect(function()
+            IncrementFusionValue(AmountToPurchase, -1, 0)
+        end)
+
+        AddToListButton.Activated:Connect(function()
+            AddProductToCart(ProductName, Peek(AmountToPurchase))
+            AmountToPurchase:set(1)
+        end)
         
-        -- Handle amount selection
-        if amountFrame then
-            local increaseBtn = amountFrame:FindFirstChild("Increase")
-            local decreaseBtn = amountFrame:FindFirstChild("Reduce")
-            local amountLabel = amountFrame:FindFirstChild("Amount")
-            
-            if amountLabel then amountLabel.Text = "1" end
-            
-            if increaseBtn and amountLabel then
-                increaseBtn.Activated:Connect(function()
-                    local current = tonumber(amountLabel.Text) or 1
-                    amountLabel.Text = tostring(math.clamp(current + 1, 1, 100))
-                end)
-            end
-            
-            if decreaseBtn and amountLabel then
-                decreaseBtn.Activated:Connect(function()
-                    local current = tonumber(amountLabel.Text) or 1
-                    amountLabel.Text = tostring(math.clamp(current - 1, 1, 100))
-                end)
-            end
-        end
         
-        -- Handle cash purchase
-        if buyButton then
-            buyButton.Activated:Connect(function()
-                local amount = 1
-                if amountFrame then
-                    local amountLabel = amountFrame:FindFirstChild("Amount")
-                    if amountLabel then
-                        amount = tonumber(amountLabel.Text) or 1
-                    end
-                end
-                -- Fire to server
-                local buyRemote = ReplicatedStorage.Remotes.Gameplay:FindFirstChild("BuyProduct")
-                if buyRemote then
-                    buyRemote:FireServer(ProductData.Name, amount)
-                else
-                    warn(`Purchase request: {ProductData.Name} x{amount}`)
-                end
-            end)
-        end
-        
-        -- Handle Robux purchase (if product has devProductId)
-        if productButton and ProductData.productId then
-            productButton.Activated:Connect(function()
-                game:GetService("MarketplaceService"):PromptProductPurchase(LocalPlayer, ProductData.productId)
-            end)
-        end
-        
-        productFrame.Parent = ProductsContainer
-    end
-    
-    if ProductTemplate then ProductTemplate.Visible = false end
-    
-    -- Show Food category by default
-    for _, productFrame in pairs(ProductsContainer:GetChildren()) do
-        if productFrame:IsA("Frame") and productFrame:FindFirstChild("Container") then
-            local categoryAttr = productFrame:GetAttribute("Category")
-            productFrame.Visible = categoryAttr == "Food"
-        end
+
+        Scope:Hydrate(ProductFrame) {
+            Name = ProductName,
+            Visible = ShowProductFrame,
+            LayoutOrder = ProductData.lvlRequirement,
+            Parent = ProductsContainer,
+        }
     end
 end
 
 
--- Initialize
-PopulateProductList()
-SetupCategorySelectors()
 
-return {}
+PopulateProductList()
+
+BuyCartButton.Activated:Connect(BuyCart)
+ClearCartButton.Activated:Connect(ClearCart)
+
+return true

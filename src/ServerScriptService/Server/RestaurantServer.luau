@@ -1,22 +1,25 @@
 --!strict
 local ReplicatedStorage   = game:GetService('ReplicatedStorage')
-local ReplicatedFirst     = game:GetService('ReplicatedFirst')
+local ServerScriptService = game:GetService('ServerScriptService')
 local Players             = game:GetService('Players')
 
-local Shared              = ReplicatedStorage:WaitForChild('SharedModules')
-local Utils               = ReplicatedStorage:WaitForChild('Utils')
-local Vendor              = ReplicatedFirst.Vendor
-
-local RestaurantShared = require(Shared.RestaurantShared)
-
-RestaurantShared.initPlots()
+local RestaurantShared  = require(ReplicatedStorage.SharedModules.RestaurantShared)
+local PlotAssignment    = require(ServerScriptService.Server.Features.PlotAssignment)
 
 Players.PlayerAdded:Connect(function(player)
+	local PlotFolder
+	repeat
+
+		PlotFolder = PlotAssignment.GetPlayerPlot(player)
+	until PlotFolder or not task.wait()
+	
+
 	local restaurantName = `{player.DisplayName}'s Restaurant`
-	local restaurant = RestaurantShared.spawnPlayerRestaurant(player, restaurantName)	
-	player.CharacterAdded:Connect(function(character)
-		RestaurantShared.tpPlayerToRestaurant(player,restaurant)	
-	end)
+	local restaurant = RestaurantShared.spawnPlayerRestaurant(player, restaurantName, PlotFolder)
+	
+	
+
+	RestaurantShared.tpPlayerToRestaurant(player, restaurant)	
 end)
 
 
