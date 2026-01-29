@@ -7,10 +7,12 @@ local GameState     = ReplicatedStorage.GameState
 local AimTarget     = GameState.AimTarget
 
 local Net                   = require(Packages.Net)
-local StartCookingProcessRF = Net:RemoteFunction("StartCookingProcess")
+local StartCookingProcessRF = Net:RemoteEvent("StartCookingProcess")
 
 local Events = require(ReplicatedStorage.SharedModules.Events)
-
+local Helpers = script.Parent.Helpers
+local GrillingVisuals = require(Helpers.GrillingVisuals)
+local FryerVisuals = require(Helpers.FryerVisuals)
 
 export type CookingProcessData = {
     ProcessType: string,
@@ -18,22 +20,19 @@ export type CookingProcessData = {
     IngredientId: string,
 }
 
-local function RequestCookingStart(MachineId: any, FoodId: string)
+local function RequestCookingStart(MachineId: any, FoodId: string, SpotId: string)
 
     local ProcessData = {
         MachineId = MachineId,
         FoodId = FoodId,
+        SpotId = SpotId,
     }
 
-    local EndTime = StartCookingProcessRF:InvokeServer(ProcessData)
-    local TimeTillEnd = EndTime - workspace:GetServerTimeNow()
+    StartCookingProcessRF:FireServer(ProcessData)
     --Play necessary twens and animations
-end
 
 local function RegisterCookingInteraction(FoodId: string)
-     local EndTime = StartCookingProcessRF:InvokeServer(FoodId)
-    local TimeTillEnd = EndTime - workspace:GetServerTimeNow()
-    --Play necessary twens and animations
+     StartCookingProcessRF:FireServer(FoodId)
 end
 
 

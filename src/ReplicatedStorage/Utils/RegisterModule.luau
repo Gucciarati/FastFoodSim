@@ -13,7 +13,7 @@ function mainModule.requireModules(moduleList: {ModuleScript | Folder})
 
 				local success, service = task.spawn(pcall, require, module)
 				if success then
-					print("[Module Loaded]:", module:GetFullName())
+					--print("[Module Loaded]:", module:GetFullName())
 
 					if type(service) == "table" and typeof(service.init) == "function" then
 						local initSuccess, err = pcall(service.init, service)

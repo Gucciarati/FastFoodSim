@@ -124,7 +124,7 @@ return {
 	["Fryer"] = {
 		icon           = "rbxassetid://125770077270823",
 		currency       = Global.Enums.CurrencyEnums.Money,
-		lvlRequirement = 9,
+		lvlRequirement = 1,
 		price          = 249.79,
 		unitPrice      = 249.79,
 		unitSize       = 1,

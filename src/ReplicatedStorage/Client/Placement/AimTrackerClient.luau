@@ -34,7 +34,7 @@ end
 
 Camera:GetPropertyChangedSignal("CFrame"):Connect(
     function()
-       print "[AimTrackerClient] Camera CFrame changed, updating focus"
+       --print "[AimTrackerClient] Camera CFrame changed, updating focus"
         UpdateFocus()
     end
 )

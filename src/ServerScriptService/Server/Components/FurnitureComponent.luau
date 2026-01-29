@@ -5,6 +5,7 @@ local Furniture = require(ReplicatedStorage.Config.Products.Furniture)
 local GeneratePackages = require(ServerScriptService.Server.Features.Delivery.Helpers.GeneratePackages)
 local CFrameSerdes = require(ReplicatedStorage.Utils.CFrameSerdes)
 local SetAnchored = require(ReplicatedStorage.Utils.SetAnchored)
+local Visibility = require(ReplicatedStorage.Utils.Visibility)
 
 local Plots = workspace.Plots
 local Assets = ReplicatedStorage.Assets
@@ -65,6 +66,13 @@ function FurnitureComponent.Place(Player: Player, FurnitureData: FurnitureData, 
 	FurnitureModel:SetAttribute("Id", FurnitureData.Id)
 	FurnitureModel.Parent = PlotFolder.Furniture
 
+
+	for _, Snap in FurnitureModel:GetDescendants() do
+		if Snap:HasTag("Snap") then
+			Visibility.HideChildren(Snap)
+		end
+	end
+
 	return FurnitureModel
 end
 
@@ -80,6 +88,13 @@ function FurnitureComponent.Unpack(PlayerData: any, PackageModel: any)
 	FurnitureModel:SetAttribute("Id", Id)
 	FurnitureModel:PivotTo(PackageModel:GetPivot())
 	FurnitureModel.Parent = PackageModel.Parent
+	
+
+	for _, Snap in FurnitureModel:GetDescendants() do
+		if Snap:HasTag("Snap") then
+			Visibility.HideChildren(Snap)
+		end
+	end
 	
 	PackageModel:Destroy()
 end

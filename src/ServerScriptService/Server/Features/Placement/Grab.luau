@@ -15,7 +15,7 @@ local function DisplayGrabVisuals(Player: Player, ItemModel: Model)
 	local Character = Player.Character
 	--if Character then return end
 
-	SetAnchored(ItemModel, false)
+	--SetAnchored(ItemModel, false)
 
 	local HeldFoodId = ItemModel:GetAttribute("Id")
 	Player:SetAttribute("GrabId", HeldFoodId)
@@ -67,9 +67,14 @@ local function ClearGrabVisuals(Player: Player, DropCFrame: CFrame)
 	if not PlotFolder then return end
 
 	local FoodModel = PlotFolder:QueryDescendants(`[$Id = {HeldFoodId}]`)[1]
-	if FoodModel then
+	if FoodModel and DropCFrame then
+		local FoodModelSize = FoodModel:GetExtentsSize()
+		DropCFrame *= CFrame.new(0, FoodModelSize.Y / 2, 0)
+		
 		FoodModel:PivotTo(DropCFrame)
 		SetAnchored(FoodModel, true)
+	elseif FoodModel then
+		FoodModel:Destroy()
 	end
 
 	ReleaseFoodRE:FireClient(Player)

@@ -21,6 +21,7 @@ local modules = {
 	ServerModules.ReplicationService,
 	ServerModules.DefaultFurnitureService,
 	
+	ServerModules.Features.Cooking.Initialize,
 	ServerModules.Features.PlotAssignment,
 	ServerModules.Features.Delivery.Delivery,
 	ServerModules.Features.Market.Buy,

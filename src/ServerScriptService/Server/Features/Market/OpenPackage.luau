@@ -41,3 +41,5 @@ local function OpenPackage(Player: Player, PackageModel: any)
 end
 
 OpenPackageRE.OnServerEvent:Connect(OpenPackage)
+print("dd")
+return true

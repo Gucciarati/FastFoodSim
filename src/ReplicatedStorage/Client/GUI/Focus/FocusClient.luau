@@ -3,14 +3,12 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local StateValue = require(ReplicatedStorage.Packages.StateValue)
 local Events = require(ReplicatedStorage.SharedModules.Events)
 
 local Helpers 		= script.Parent.Helpers
-local FindAssembly 	= require(Helpers.FindAssembly)
+local FindAssembly 	= require(ReplicatedStorage.Utils.FindAssembly)
 local UpdateVisuals = require(Helpers.UpdateVisuals)
-
-local InteractionRegistry = require(Helpers.InteractionRegistry)
-local ItemRegistration = require(Helpers.ItemRegistration)
 
 local INTERACTION_DISTANCE = 16
 
@@ -34,7 +32,6 @@ local function UpdateFocus()
 	local Position = AimPosition.Value
 	
 	local DeterminedTarget
-	print("[FocusClient] UpdateFocus called - Target:", Target, "Position:", Position)
 	
 	local Character = Player.Character
 	if not Character then return end
@@ -44,26 +41,16 @@ local function UpdateFocus()
 	
 	local Distance = (HumanoidRootPart.Position - Position).Magnitude
 	local IsWithinRange = Distance <= INTERACTION_DISTANCE
-	if not IsWithinRange then return end
-	
-	local Assembly = FindAssembly(Target)
 
-	DeterminedTarget = Assembly or Target
+	local Assembly = FindAssembly(Target)
+	DeterminedTarget = if IsWithinRange then (Assembly or Target) else nil
 	
 	--print("[FocusClient] Found interaction:", DeterminedTarget.Title)
 	if CurrentTarget ~= DeterminedTarget then
 		CurrentTarget = DeterminedTarget
-		UpdateVisuals(DeterminedTarget)
+		StateValue.Set("CurrentInteractable", DeterminedTarget)
+		UpdateVisuals(Assembly)
 	end
-end
-
-local function OnAimTargetChanged()
-	print("[FocusClient] AimTarget changed to:", AimTarget.Value)
-	UpdateFocus()
-end
-
-local function OnAimPositionChanged()
-	UpdateFocus()
 end
 
 local function OnInputBegan(Input: InputObject, GameProcessed: boolean)
@@ -80,16 +67,10 @@ end
 
 Cursor.Visible = true
 
-AimTarget.Changed:Connect(OnAimTargetChanged)
-AimPosition.Changed:Connect(OnAimPositionChanged)
+StateValue.Create("CurrentInteractable", nil)
+
+AimTarget.Changed:Connect(UpdateFocus)
+AimPosition.Changed:Connect(UpdateFocus)
 UserInputService.InputBegan:Connect(OnInputBegan)
 
-ItemRegistration.RegisterAllPlots()
-
-local FocusClient = {}
-
-FocusClient.InteractPressedSignal = Events.InteractPressed
-FocusClient.OpenPackagePressedSignal = Events.SecondaryInteractPressed
-FocusClient.InteractionRegistry = InteractionRegistry
-
-return FocusClient
+return true

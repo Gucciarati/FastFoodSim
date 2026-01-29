@@ -23,7 +23,8 @@ local modules = {
 	ClientModules.ReplicationClient,
 	ClientModules.PlacementClient,
 	ClientModules.Cooking.FoodPlacementClient,
-}:: {ModuleScript}
+	ClientModules.Cooking.CookingClient,
+	ClientModules.Cooking.SetupCookingSnaps,	ClientModules.Cooking.CookingInteractionListener,}:: {ModuleScript}
 
 
 ConnectUtil.attributeChanged(GameState, Global.Attributes.GameState.ServerInitialized, function(serverInit)

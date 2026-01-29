@@ -20,7 +20,7 @@ local LID_CUP_FOODS = {
 	["Milkshake Cup"] = true,
 }
 
-local function GetInteractableStats(Interactable: Instance): InteractableStats
+local function GetInteractableStats(Interactable: Instance, Target: any): InteractableStats
 	if not Interactable then
 		return { Type = "Generic", Name = "Unknown" }
 	end
@@ -30,6 +30,10 @@ local function GetInteractableStats(Interactable: Instance): InteractableStats
 	local ItemName = Interactable:GetAttribute("ItemName") :: string?
 	local EndTime = Interactable:GetAttribute("EndTime") :: number?
 	
+	if Interactable:HasTag("Snap") then
+		return { Type = "Cooktop", Name = Name }
+	end
+
 	if Interactable.Name == "Furniture Box" then
 		local DisplayName = ItemName or "Furniture"
 		return {

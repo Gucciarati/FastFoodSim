@@ -15,6 +15,8 @@ local MakePackagesInvisible 	= require(Helpers.MakePackagesInvisible)
 local RevealPackages 			= require(Helpers.RevealPackages)
 local DepartTruck 				= require(Helpers.DepartTruck)
 
+local SetAnchored = require(ReplicatedStorage.Utils.SetAnchored)
+
 local Plots = workspace.Plots
 
 local ActiveTrucksByRestaurant: { [any]: Model } = {}
@@ -38,6 +40,10 @@ local function RequestDelivery(Player: Player, DeliveryList: any)
 	assert(PlotFolder, `No plot folder found for {UserId}`)
 
 	local Packages = GeneratePackages(DeliveryList)
+
+	for _, Package in Packages do
+		SetAnchored(Package, true)
+	end
 
 	local IsActive = ActiveTrucksByRestaurant[UserId]
 	if IsActive then return end

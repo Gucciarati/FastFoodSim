@@ -60,11 +60,12 @@ function FoodComponent.RemoveFromPackage(PackageModel: Model): boolean
 	return true
 end
 
-function FoodComponent.GenerateFood(FoodName: string): Model?
-	local FoodTemplate = Assets.Products:FindFirstChild(FoodName, true)
+function FoodComponent.GenerateFood(FoodName: string): Model
+	local FoodTemplate = Assets.Products:FindFirstChild(FoodName, true)["1"]
 	if not FoodTemplate then return nil end
 	
 	local FoodModel = FoodTemplate:Clone()
+	FoodModel:SetAttribute("Id", FoodModel.Name)
 	FoodModel.Name = FoodName
 	
 	return FoodModel
